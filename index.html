@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>DCA Dynamique</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial; background:#0f172a; color:white; margin:0; padding:20px }
+    .card { background:#1e293b; padding:15px; border-radius:10px; margin-bottom:15px }
+    button { padding:10px; border:none; border-radius:6px; cursor:pointer }
+    .btn { background:#3b82f6; color:white }
+    .btn-green { background:#22c55e }
+    input { padding:8px; margin:5px 0; width:100% }
+  </style>
+</head>
+<body>
+
+<h1>DCA Dynamique</h1>
+
+<div class="card">
+  <h3>Ajouter un actif</h3>
+  <input id="name" placeholder="Nom">
+  <input id="dca" placeholder="DCA de base" type="number">
+  <button class="btn" onclick="addAsset()">Ajouter</button>
+</div>
+
+<div id="assets"></div>
+
+<script>
+let assets = JSON.parse(localStorage.getItem('assets') || '[]')
+
+const config = {
+  highThreshold: 0.2,
+  lowThreshold: -0.2,
+  reductionPct: 0.4,
+  increasePct: 0.4
+}
+
+function save() {
+  localStorage.setItem('assets', JSON.stringify(assets))
+}
+
+function computeDCA(asset, price) {
+  const avg = asset.avg || price
+  const diff = (price - avg) / avg
+
+  let dca = asset.base
+  let reason = "Marché neutre"
+  let reserveChange = 0
+
+  if (diff >= config.highThreshold) {
+    let reduction = asset.base * config.reductionPct
+    dca -= reduction
+    reserveChange = reduction
+    reason = "Marché élevé"
+  } else if (diff <= config.lowThreshold) {
+    let increase = asset.base * config.increasePct
+    let usable = Math.min(increase, asset.reserve)
+    dca += usable
+    reserveChange = -usable
+    reason = "Marché bas"
+  }
+
+  return { dca, reason, reserveChange }
+}
+
+function addAsset() {
+  const name = document.getElementById('name').value
+  const base = Number(document.getElementById('dca').value)
+
+  assets.push({
+    id: Date.now(),
+    name,
+    base,
+    qty: 0,
+    avg: 0,
+    reserve: 0
+  })
+
+  save()
+  render()
+}
+
+function invest(id) {
+  const price = Number(prompt("Prix actuel"))
+  if (!price) return
+
+  const asset = assets.find(a => a.id === id)
+
+  const { dca, reason, reserveChange } = computeDCA(asset, price)
+
+  const qtyBought = dca / price
+  const newQty = asset.qty + qtyBought
+
+  const newAvg = asset.qty === 0
+    ? price
+    : ((asset.qty * asset.avg) + dca) / newQty
+
+  asset.qty = newQty
+  asset.avg = newAvg
+  asset.reserve += reserveChange
+
+  alert(`${reason}\nDCA: ${dca.toFixed(2)}€`)
+
+  save()
+  render()
+}
+
+function removeAsset(id) {
+  assets = assets.filter(a => a.id !== id)
+  save()
+  render()
+}
+
+function render() {
+  const container = document.getElementById('assets')
+  container.innerHTML = ''
+
+  assets.forEach(a => {
+    const div = document.createElement('div')
+    div.className = 'card'
+
+    div.innerHTML = `
+      <h2>${a.name}</h2>
+      <p>Quantité: ${a.qty.toFixed(4)}</p>
+      <p>Prix moyen: ${a.avg.toFixed(2)}€</p>
+      <p>Réserve: ${a.reserve.toFixed(2)}€</p>
+      <p>DCA de base: ${a.base}€</p>
+      <button class="btn-green" onclick="invest(${a.id})">Investir</button>
+      <button onclick="removeAsset(${a.id})">Supprimer</button>
+    `
+
+    container.appendChild(div)
+  })
+}
+
+render()
+</script>
+
+</body>
+</html>
