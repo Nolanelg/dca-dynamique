@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCA Dynamique</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+
+.app { max-width: 900px; margin: 0 auto; padding: 1rem; }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 0 1.5rem; border-bottom: 0.5px solid rgba(0,0,0,0.12); margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem; }
+.logo { font-size: 18px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #185FA5; }
+.user-code { font-size: 12px; color: #555; background: #e8e8e3; padding: 4px 10px; border-radius: 20px; border: 0.5px solid rgba(0,0,0,0.12); font-family: monospace; cursor: pointer; }
+.sync-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+.sync-ok  { background: #EAF3DE; color: #3B6D11; }
+.sync-err { background: #FAECE7; color: #993C1D; }
+.sync-ing { background: #E6F1FB; color: #185FA5; }
+
+.nav { display: flex; gap: 4px; margin-bottom: 1.5rem; background: #e8e8e3; padding: 4px; border-radius: 10px; border: 0.5px solid rgba(0,0,0,0.1); overflow-x: auto; }
+.nav-btn { padding: 6px 14px; border: none; background: none; border-radius: 7px; font-size: 13px; cursor: pointer; color: #555; transition: all 0.15s; font-family: inherit; white-space: nowrap; }
+.nav-btn.active { background: #fff; color: #1a1a1a; font-weight: 500; border: 0.5px solid rgba(0,0,0,0.12); }
+.nav-btn:hover:not(.active) { color: #1a1a1a; }
+
+.card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1); padding: 1.25rem; margin-bottom: 1rem; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1rem; }
+.metric { background: #f5f5f0; border-radius: 8px; padding: 0.875rem; }
+.metric-label { font-size: 11px; color: #666; margin-bottom: 4px; }
+.metric-value { font-size: 20px; font-weight: 500; }
+.metric-value.positive { color: #0F6E56; }
+.metric-value.negative { color: #A32D2D; }
+.metric-value.neutral  { color: #185FA5; }
+
+.asset-card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1); padding: 1.25rem; margin-bottom: 1rem; }
+.asset-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px; }
+.asset-name { font-size: 16px; font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.asset-ticker { font-size: 11px; background: #f0efe8; padding: 2px 8px; border-radius: 4px; color: #666; font-family: monospace; }
+.badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+.badge-up      { background: #FAECE7; color: #993C1D; }
+.badge-down    { background: #EAF3DE; color: #3B6D11; }
+.badge-neutral { background: #E6F1FB; color: #185FA5; }
+
+.decision-box    { border-radius: 8px; padding: 1rem; margin-top: 0.75rem; }
+.decision-invest { background: #E1F5EE; border: 0.5px solid #9FE1CB; }
+.decision-reduce { background: #FAECE7; border: 0.5px solid #F5C4B3; }
+.decision-normal { background: #E6F1FB; border: 0.5px solid #B5D4F4; }
+.decision-label  { font-size: 11px; font-weight: 500; margin-bottom: 4px; }
+.decision-invest .decision-label { color: #0F6E56; }
+.decision-reduce .decision-label { color: #993C1D; }
+.decision-normal .decision-label { color: #185FA5; }
+.decision-amount { font-size: 28px; font-weight: 500; }
+.decision-invest .decision-amount { color: #085041; }
+.decision-reduce .decision-amount { color: #712B13; }
+.decision-normal .decision-amount { color: #0C447C; }
+.decision-detail { font-size: 12px; color: #555; margin-top: 4px; }
+
+.input-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 0.75rem; }
+.input-group { display: flex; flex-direction: column; gap: 4px; }
+.input-group label { font-size: 12px; color: #555; }
+input[type="number"], input[type="text"], select {
+  width: 100%; padding: 8px 10px; border: 1px solid rgba(0,0,0,0.18); border-radius: 6px;
+  background: #fff; color: #1a1a1a; font-size: 14px; font-family: inherit;
+}
+input:focus, select:focus { outline: none; border-color: #185FA5; box-shadow: 0 0 0 2px rgba(24,95,165,0.12); }
+
+.btn { padding: 8px 16px; border-radius: 7px; border: 1px solid rgba(0,0,0,0.15); background: #fff; color: #1a1a1a; font-size: 13px; cursor: pointer; font-family: inherit; transition: all 0.15s; font-weight: 500; }
+.btn:hover  { background: #f0efe8; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: #185FA5; color: #fff; border-color: #185FA5; }
+.btn-primary:hover { background: #0C447C; }
+.btn-danger  { color: #A32D2D; border-color: #F7C1C1; }
+.btn-danger:hover  { background: #FCEBEB; }
+.btn-success { background: #0F6E56; color: #fff; border-color: #0F6E56; }
+.btn-success:hover { background: #085041; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.reserve-bar  { background: rgba(0,0,0,0.08); border-radius: 6px; height: 8px; margin-top: 8px; overflow: hidden; }
+.reserve-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #1D9E75, #185FA5); transition: width 0.4s; }
+
+.history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid rgba(0,0,0,0.08); font-size: 13px; }
+.history-item:last-child { border-bottom: none; }
+.history-date  { color: #666; font-size: 11px; }
+.history-amount     { font-weight: 500; }
+.history-amount.pos { color: #0F6E56; }
+.history-amount.neg { color: #A32D2D; }
+
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex; align-items: flex-start; justify-content: center;
+  z-index: 9999; padding: 2rem 1rem; overflow-y: auto;
+}
+.modal {
+  background: #fff; border-radius: 14px; padding: 1.5rem;
+  width: 100%; max-width: 520px; border: 1px solid rgba(0,0,0,0.12);
+  position: relative; margin: auto;
+}
+.modal-title   { font-size: 16px; font-weight: 500; margin-bottom: 1.25rem; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.25rem; padding-top: 1rem; border-top: 0.5px solid rgba(0,0,0,0.08); }
+
+.section-title     { font-size: 15px; font-weight: 500; margin-bottom: 1rem; }
+.empty-state       { text-align: center; padding: 3rem 1rem; color: #666; font-size: 14px; }
+.empty-icon        { font-size: 32px; margin-bottom: 0.75rem; }
+.welcome-screen    { text-align: center; padding: 3rem 1.5rem; }
+.welcome-title     { font-size: 24px; font-weight: 500; margin-bottom: 0.5rem; }
+.welcome-sub       { color: #555; font-size: 15px; margin-bottom: 2rem; line-height: 1.6; }
+.code-display      { font-size: 28px; font-family: monospace; font-weight: 500; letter-spacing: 0.1em; background: #f0efe8; padding: 1rem 2rem; border-radius: 10px; display: inline-block; margin: 1rem 0; color: #185FA5; border: 2px dashed rgba(24,95,165,0.3); }
+.alert             { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 1rem; }
+.alert-warning     { background: #FAEEDA; color: #633806; border: 0.5px solid #FAC775; }
+.alert-info        { background: #E6F1FB; color: #0C447C; border: 0.5px solid #B5D4F4; }
+.alert-success     { background: #EAF3DE; color: #3B6D11; border: 0.5px solid #C0DD97; }
+.section-separator { font-size: 12px; font-weight: 500; color: #666; margin: 0.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 0.5px solid rgba(0,0,0,0.08); }
+
+.setup-card  { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1); padding: 1.5rem; max-width: 600px; margin: 0 auto 1rem; text-align: left; }
+.step-list   { list-style: none; counter-reset: steps; }
+.step-list li { counter-increment: steps; padding: 7px 0 7px 30px; position: relative; font-size: 13px; color: #333; border-bottom: 0.5px solid rgba(0,0,0,0.06); }
+.step-list li:last-child { border-bottom: none; }
+.step-list li::before { content: counter(steps); position: absolute; left: 0; top: 8px; width: 20px; height: 20px; border-radius: 50%; background: #185FA5; color: #fff; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.sql-block { background: #1a1a1a; color: #a8ff78; font-family: monospace; font-size: 11px; padding: 1rem; border-radius: 8px; margin-top: 1rem; overflow-x: auto; white-space: pre; line-height: 1.6; }
+
+@media (max-width: 600px) {
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .input-row   { grid-template-columns: 1fr 1fr; }
+  .nav-btn     { padding: 6px 10px; font-size: 12px; }
+  .modal-overlay { padding: 1rem 0.5rem; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+/* ================================================================
+   CONFIGURATION SUPABASE
+   ----------------------------------------------------------------
+   Remplissez ces deux valeurs pour activer la synchro multi-appareils.
+   Laissez vide pour fonctionner en mode local (un seul appareil).
+   ================================================================ */
+const SUPABASE_URL  = '';   // ex: https://abcdefgh.supabase.co
+const SUPABASE_ANON = '';   // clé "anon public" depuis Settings > API
+/* ================================================================ */
+
+const TABLE    = 'dca_portfolios';
+const LOCAL_KEY = 'dca_app_v2';
+
+/* ---- Supabase REST helpers ---- */
+const sbReady = () => !!(SUPABASE_URL && SUPABASE_ANON);
+
+async function sbFetch(path, opts = {}) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    ...opts,
+    headers: {
+      'apikey': SUPABASE_ANON,
+      'Authorization': 'Bearer ' + SUPABASE_ANON,
+      'Content-Type': 'application/json',
+      'Prefer': opts.prefer || 'return=representation',
+      ...(opts.headers || {})
+    }
+  });
+  if(!res.ok) throw new Error(await res.text());
+  const t = await res.text();
+  return t ? JSON.parse(t) : null;
+}
+
+async function cloudLoad(code) {
+  const rows = await sbFetch(`${TABLE}?user_code=eq.${encodeURIComponent(code)}&select=payload`);
+  return rows && rows.length > 0 ? rows[0].payload : null;
+}
+
+async function cloudSave(d) {
+  if(!sbReady()) return;
+  try {
+    setSyncBadge('syncing');
+    // upsert via delete + insert (compatible avec tous les plans Supabase)
+    await sbFetch(`${TABLE}?user_code=eq.${encodeURIComponent(d.userCode)}`, { method:'DELETE', prefer:'return=minimal' });
+    await sbFetch(TABLE, { method:'POST', body: JSON.stringify({ user_code: d.userCode, payload: d, updated_at: new Date().toISOString() }), prefer:'return=minimal' });
+    setSyncBadge('ok');
+  } catch(e) {
+    console.error('cloudSave error:', e);
+    setSyncBadge('err');
+  }
+}
+
+/* ---- Local cache ---- */
+function localLoad() { try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || null; } catch(e) { return null; } }
+function localSave(d) { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(d)); } catch(e) {} }
+
+/* ---- Unified save ---- */
+function saveData(d) { localSave(d); cloudSave(d); }
+
+/* ---- Utils ---- */
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:8}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+}
+
+function fmt(n) {
+  if(n == null || isNaN(n)) return '0';
+  return Number(n).toLocaleString('fr-FR', { minimumFractionDigits:0, maximumFractionDigits:2 });
+}
+
+function setSyncBadge(s) {
+  state.syncStatus = s;
+  const el = document.getElementById('sync-badge');
+  if(!el) return;
+  const labels  = { ok:'✓ Synchronisé', err:'⚠ Hors ligne', syncing:'⟳ Sync...' };
+  const classes = { ok:'sync-badge sync-ok', err:'sync-badge sync-err', syncing:'sync-badge sync-ing' };
+  el.textContent = labels[s]; el.className = classes[s];
+}
+
+/* ---- DCA logic ---- */
+function calcDCA(asset) {
+  const { currentPrice, avgPrice, dcaBase, reserve, thresholds } = asset;
+  const t = thresholds || { high:20, low:20, highAdjust:40, lowAdjust:40 };
+  if(!avgPrice || avgPrice === 0)
+    return { dcaRecommended:dcaBase, delta:0, status:'neutral', reason:'Marché neutre', pct:0, canApply:true };
+
+  const pct = ((currentPrice - avgPrice) / avgPrice) * 100;
+  let status, reason, adjustPct;
+  if(pct >= t.high)      { status='high';    reason='Marché élevé';    adjustPct=t.highAdjust; }
+  else if(pct <= -t.low) { status='low';     reason='Marché en baisse'; adjustPct=t.lowAdjust; }
+  else                   { status='neutral'; reason='Marché neutre';   adjustPct=0; }
+
+  const delta = (dcaBase * Math.abs(adjustPct)) / 100;
+  let dcaRecommended = dcaBase, canApply = true;
+  if(status === 'high') {
+    dcaRecommended = dcaBase - delta;
+  } else if(status === 'low') {
+    dcaRecommended = dcaBase + delta;
+    if((reserve||0) < delta) { dcaRecommended = dcaBase + (reserve||0); canApply = (reserve||0) > 0; }
+  }
+  dcaRecommended = Math.max(0, Math.round(dcaRecommended * 100) / 100);
+  return { dcaRecommended, delta: Math.round((dcaRecommended - dcaBase)*100)/100, status, reason, pct: Math.round(pct*10)/10, canApply };
+}
+
+/* ================================================================
+   STATE
+   ================================================================ */
+let state = {
+  screen: 'loading',
+  tab: 'dashboard',
+  modal: null,
+  data: null,
+  syncStatus: 'ok',
+  simAsset: null, simMonths: 12, simScenario: 'flat'
+};
+
+/* ================================================================
+   RENDER ENGINE
+   ================================================================ */
+function render() {
+  const old = document.getElementById('modal-root');
+  if(old) old.remove();
+
+  const app = document.getElementById('app');
+  const screens = {
+    loading:      () => `<div class="empty-state" style="padding-top:5rem;"><div class="empty-icon">⏳</div>Chargement...</div>`,
+    welcome:      renderWelcome,
+    setup:        renderSetup,
+    'enter-code': renderEnterCode,
+    main:         renderMain
+  };
+  app.innerHTML = (screens[state.screen] || screens.welcome)();
+
+  if(state.modal && state.screen === 'main') {
+    const div = document.createElement('div');
+    div.id = 'modal-root';
+    div.innerHTML = renderModal();
+    document.body.appendChild(div);
+  }
+}
+
+/* ---- SCREENS ---- */
+function renderWelcome() {
+  const note = sbReady()
+    ? `<div class="alert alert-success" style="max-width:400px;margin:1.5rem auto 0;text-align:left;">✓ Synchronisation cloud activée — votre code fonctionne sur tous vos appareils.</div>`
+    : `<div class="alert alert-warning" style="max-width:400px;margin:1.5rem auto 0;text-align:left;">⚠ Mode local uniquement. <a href="#" onclick="state.screen='setup';render();return false;" style="color:#633806;font-weight:500;">Configurer Supabase</a> pour activer la synchro multi-appareils.</div>`;
+  return `<div class="welcome-screen">
+    <div style="font-size:48px;margin-bottom:1rem;">📈</div>
+    <div class="welcome-title">DCA Dynamique</div>
+    <div class="welcome-sub">Gérez votre stratégie d'investissement DCA adaptatif.<br>Votre réserve finance automatiquement les opportunités d'achat.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:320px;margin:0 auto;">
+      <button class="btn btn-primary" onclick="newAccount()" style="padding:12px;">Créer un nouveau compte</button>
+      <button class="btn" onclick="state.screen='enter-code';render()" style="padding:12px;">Accéder avec mon code</button>
+    </div>
+    ${note}
+  </div>`;
+}
+
+function renderSetup() {
+  const sql = `CREATE TABLE IF NOT EXISTS dca_portfolios (
+  id          BIGSERIAL PRIMARY KEY,
+  user_code   TEXT UNIQUE NOT NULL,
+  payload     JSONB NOT NULL,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE dca_portfolios DISABLE ROW LEVEL SECURITY;`;
+  return `<div class="welcome-screen">
+    <div style="font-size:48px;margin-bottom:1rem;">⚙️</div>
+    <div class="welcome-title">Configurer Supabase</div>
+    <div class="welcome-sub">Suivez ces étapes pour activer la synchronisation multi-appareils.</div>
+    <div class="setup-card">
+      <ol class="step-list">
+        <li>Créez un compte gratuit sur <strong>supabase.com</strong></li>
+        <li>Créez un nouveau projet</li>
+        <li>Dans <strong>SQL Editor</strong>, exécutez le script ci-dessous</li>
+        <li>Dans <strong>Settings &gt; API</strong>, copiez l'<em>URL du projet</em> et la clé <em>anon public</em></li>
+        <li>Ouvrez <code>dca-dynamique.html</code> dans un éditeur de texte et collez vos valeurs dans <code>SUPABASE_URL</code> et <code>SUPABASE_ANON</code> (lignes 3 et 4 du script)</li>
+        <li>Re-déployez le fichier sur GitHub Pages</li>
+      </ol>
+      <div class="sql-block">${sql.replace(/</g,'&lt;')}</div>
+    </div>
+    <div class="alert alert-info" style="max-width:600px;margin:0 auto 1rem;">
+      Supabase est <strong>gratuit</strong> jusqu'à 500 Mo — largement suffisant pour un usage personnel.
+    </div>
+    <button class="btn" onclick="state.screen='welcome';render()">Retour</button>
+  </div>`;
+}
+
+function renderEnterCode() {
+  return `<div class="welcome-screen">
+    <div class="welcome-title">Accéder à mon compte</div>
+    <div class="welcome-sub">Entrez votre code unique (8 caractères).</div>
+    <div style="max-width:320px;margin:0 auto;">
+      <input type="text" id="code-input" placeholder="Ex: ABC12345"
+        style="text-align:center;font-size:22px;letter-spacing:0.12em;font-family:monospace;padding:12px;width:100%;margin-bottom:10px;text-transform:uppercase;"
+        oninput="this.value=this.value.toUpperCase()"
+        onkeydown="if(event.key==='Enter')loginWithCode()">
+      <button class="btn btn-primary" id="btn-login" onclick="loginWithCode()" style="width:100%;padding:12px;">Accéder</button>
+      <button class="btn" onclick="state.screen='welcome';render()" style="width:100%;padding:10px;margin-top:8px;">Retour</button>
+    </div>
+    <div id="code-error" style="color:#A32D2D;font-size:13px;margin-top:0.75rem;min-height:20px;"></div>
+  </div>`;
+}
+
+function renderMain() {
+  const d = state.data;
+  const totalValue   = (d.assets||[]).reduce((s,a) => s + a.currentPrice*a.quantity, 0);
+  const totalReserve = (d.assets||[]).reduce((s,a) => s + (a.reserve||0), 0);
+  const tabs = [{id:'dashboard',label:'Tableau de bord'},{id:'assets',label:'Actifs'},{id:'history',label:'Historique'},{id:'simulator',label:'Simulateur'},{id:'settings',label:'Paramètres'}];
+  return `
+  <div class="header">
+    <div class="logo"><div class="logo-dot"></div>DCA Dynamique</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      ${sbReady() ? `<span id="sync-badge" class="sync-badge sync-${state.syncStatus}">${{ok:'✓ Synchronisé',err:'⚠ Hors ligne',syncing:'⟳ Sync...'}[state.syncStatus]||''}</span>` : '<span class="sync-badge sync-err">Local</span>'}
+      <div class="user-code" onclick="copyCode()" title="Cliquer pour copier">Code: ${d.userCode} 📋</div>
+      <button class="btn btn-danger" onclick="logout()" style="font-size:12px;padding:4px 10px;">Déconnexion</button>
+    </div>
+  </div>
+  <nav class="nav">${tabs.map(t=>`<button class="nav-btn ${state.tab===t.id?'active':''}" onclick="setTab('${t.id}')">${t.label}</button>`).join('')}</nav>
+  <div id="tab-content">
+    ${state.tab==='dashboard' ? renderDashboard(d,totalValue,totalReserve) : ''}
+    ${state.tab==='assets'    ? renderAssets(d) : ''}
+    ${state.tab==='history'   ? renderHistory(d) : ''}
+    ${state.tab==='simulator' ? renderSimulator(d) : ''}
+    ${state.tab==='settings'  ? renderSettings(d) : ''}
+  </div>`;
+}
+
+/* ---- DASHBOARD ---- */
+function renderDashboard(d, tv, tr) {
+  const assets = d.assets||[];
+  return `
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-label">Valeur totale</div><div class="metric-value neutral">€${fmt(tv)}</div></div>
+    <div class="metric"><div class="metric-label">Réserve totale</div><div class="metric-value positive">€${fmt(tr)}</div></div>
+    <div class="metric"><div class="metric-label">DCA mensuel base</div><div class="metric-value">€${fmt(assets.reduce((s,a)=>s+a.dcaBase,0))}</div></div>
+    <div class="metric"><div class="metric-label">Actifs suivis</div><div class="metric-value">${assets.length}</div></div>
+  </div>
+  ${assets.length===0 ? `<div class="empty-state"><div class="empty-icon">📊</div>Aucun actif ajouté.<br>Rendez-vous dans l'onglet <strong>Actifs</strong> pour commencer.</div>` : assets.map(a=>renderAssetCard(a,true)).join('')}`;
+}
+
+function renderAssets(d) {
+  const assets = d.assets||[];
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <div class="section-title" style="margin:0;">Mes actifs</div>
+    <button class="btn btn-primary" onclick="openAddAsset()">+ Ajouter un actif</button>
+  </div>
+  ${assets.length===0 ? `<div class="empty-state"><div class="empty-icon">📦</div>Aucun actif.</div>` : assets.map(a=>renderAssetCard(a,false)).join('')}`;
+}
+
+function renderAssetCard(a, dashboard) {
+  const calc = calcDCA(a);
+  const value = a.currentPrice * a.quantity;
+  const rPct  = Math.min(100, a.reserve>0 ? Math.min(100,(a.reserve/(a.dcaBase*3))*100) : 0);
+  const sc = calc.status==='high'?'badge-up':calc.status==='low'?'badge-down':'badge-neutral';
+  const dc = calc.status==='high'?'decision-reduce':calc.status==='low'?'decision-invest':'decision-normal';
+  const dt = calc.delta>0?`+€${fmt(calc.delta)}`:calc.delta<0?`-€${fmt(Math.abs(calc.delta))}`:'inchangé';
+  const warn = calc.status==='low' && (a.reserve||0)<(a.dcaBase*(a.thresholds?.lowAdjust||40)/100) && (a.reserve||0)>0;
+  return `
+  <div class="asset-card">
+    <div class="asset-header">
+      <div class="asset-name">${a.icon||'📦'} ${a.name}<span class="asset-ticker">${a.ticker||''}</span><span class="badge ${sc}">${calc.reason}</span></div>
+      ${!dashboard ? `<button class="btn btn-danger" onclick="deleteAsset('${a.id}')" style="font-size:12px;padding:4px 8px;">Supprimer</button>` : ''}
+    </div>
+    <div class="metric-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="metric"><div class="metric-label">Prix actuel</div><div class="metric-value" style="font-size:15px;">€${fmt(a.currentPrice)}</div></div>
+      <div class="metric"><div class="metric-label">Prix moyen</div><div class="metric-value" style="font-size:15px;">€${fmt(a.avgPrice||0)}</div></div>
+      <div class="metric"><div class="metric-label">Quantité</div><div class="metric-value" style="font-size:15px;">${a.quantity}</div></div>
+      <div class="metric"><div class="metric-label">Valeur</div><div class="metric-value neutral" style="font-size:15px;">€${fmt(value)}</div></div>
+    </div>
+    ${warn ? `<div class="alert alert-warning">Réserve insuffisante — montant ajusté automatiquement.</div>` : ''}
+    <div class="decision-box ${dc}">
+      <div class="decision-label">${calc.reason.toUpperCase()} — DCA RECOMMANDÉ</div>
+      <div class="decision-amount">€${fmt(calc.dcaRecommended)}</div>
+      <div class="decision-detail">Base: €${fmt(a.dcaBase)} | Variation: ${dt} | Réserve: €${fmt(a.reserve||0)} | Écart: ${calc.pct>0?'+':''}${calc.pct}%</div>
+      <div class="reserve-bar"><div class="reserve-fill" style="width:${rPct}%"></div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:0.75rem;flex-wrap:wrap;">
+      <button class="btn btn-success" onclick="applyDCA('${a.id}')">Appliquer ce DCA →</button>
+      <button class="btn" onclick="updatePrice('${a.id}')">Mettre à jour le prix</button>
+    </div>
+  </div>`;
+}
+
+function renderHistory(d) {
+  const h = [...(d.history||[])].reverse();
+  return `
+  <div class="section-title">Historique des transactions</div>
+  <div class="card">
+    ${h.length===0 ? `<div class="empty-state" style="padding:2rem 0;"><div class="empty-icon">📋</div>Aucune transaction.</div>` :
+    h.map(e=>`<div class="history-item">
+      <div>
+        <div style="font-weight:500;">${e.assetName} — €${fmt(e.dcaApplied)} investis</div>
+        <div class="history-date">${e.date} | Prix: €${fmt(e.price)} | Qté: +${e.qty}</div>
+        <div style="font-size:11px;color:#666;">${e.reason}</div>
+      </div>
+      <div class="history-amount ${e.reserveDelta>=0?'pos':'neg'}">${e.reserveDelta>=0?'+':''}€${fmt(e.reserveDelta)}<br><span style="font-size:10px;color:#666;">réserve</span></div>
+    </div>`).join('')}
+  </div>
+  ${h.length>0 ? `<button class="btn" onclick="exportCSV()" style="width:100%;">Exporter CSV ↗</button>` : ''}`;
+}
+
+function renderSimulator(d) {
+  const assets = d.assets||[], sel = state.simAsset||(assets[0]?.id||null), asset = assets.find(a=>a.id===sel), m = parseInt(state.simMonths||12);
+  let rows = [];
+  if(asset) {
+    let res=asset.reserve||0, qty=asset.quantity, total=0;
+    for(let i=0;i<m;i++) {
+      const p = asset.currentPrice * Math.pow(1+(state.simScenario==='bull'?3:state.simScenario==='bear'?-3:0)/100, i);
+      const c = calcDCA({...asset, currentPrice:Math.round(p*100)/100, reserve:res});
+      const qb = p>0 ? Math.round((c.dcaRecommended/p)*10000)/10000 : 0;
+      res = Math.max(0, res+(asset.dcaBase-c.dcaRecommended)); qty+=qb; total+=c.dcaRecommended;
+      rows.push({month:i+1,price:Math.round(p*100)/100,dca:Math.round(c.dcaRecommended*100)/100,reserve:Math.round(res*100)/100,qty:Math.round(qty*1000)/1000,total:Math.round(total*100)/100});
+    }
+  }
+  return `
+  <div class="section-title">Simulateur</div>
+  <div class="card">
+    <div class="input-row">
+      <div class="input-group"><label>Actif</label><select onchange="state.simAsset=this.value;render()">${assets.map(a=>`<option value="${a.id}" ${sel===a.id?'selected':''}>${a.name}</option>`).join('')}</select></div>
+      <div class="input-group"><label>Durée (mois)</label><input type="number" min="1" max="60" value="${m}" onchange="state.simMonths=this.value;render()"></div>
+      <div class="input-group"><label>Scénario</label><select onchange="state.simScenario=this.value;render()">
+        <option value="flat" ${state.simScenario==='flat'?'selected':''}>Prix stable</option>
+        <option value="bull" ${state.simScenario==='bull'?'selected':''}>Haussier +3%/mois</option>
+        <option value="bear" ${state.simScenario==='bear'?'selected':''}>Baissier -3%/mois</option>
+      </select></div>
+    </div>
+  </div>
+  ${!asset ? '<div class="empty-state">Ajoutez un actif pour simuler.</div>' : `
+  <div class="card" style="overflow-x:auto;">
+    <table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <thead><tr>${['Mois','Prix €','DCA €','Réserve €','Quantité','Total investi €'].map(h=>`<th style="text-align:right;padding:6px 8px;color:#666;font-weight:500;border-bottom:0.5px solid rgba(0,0,0,0.1);">${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r,i)=>`<tr style="background:${i%2?'#f9f9f6':'transparent'}">
+        <td style="padding:5px 8px;text-align:right;">${r.month}</td>
+        <td style="padding:5px 8px;text-align:right;">${fmt(r.price)}</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:500;">${fmt(r.dca)}</td>
+        <td style="padding:5px 8px;text-align:right;color:#0F6E56;">${fmt(r.reserve)}</td>
+        <td style="padding:5px 8px;text-align:right;">${r.qty}</td>
+        <td style="padding:5px 8px;text-align:right;">${fmt(r.total)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`}`;
+}
+
+function renderSettings(d) {
+  const def = d.defaults||{high:20,highAdjust:40,low:20,lowAdjust:40};
+  return `
+  <div class="section-title">Paramètres globaux</div>
+  <div class="card">
+    <div style="font-size:13px;color:#555;margin-bottom:1rem;">Seuils appliqués aux nouveaux actifs.</div>
+    <div class="input-row">
+      <div class="input-group"><label>Seuil marché élevé (%)</label><input type="number" id="s-high" value="${def.high}"></div>
+      <div class="input-group"><label>Réduction DCA (%)</label><input type="number" id="s-highAdj" value="${def.highAdjust}"></div>
+      <div class="input-group"><label>Seuil marché bas (%)</label><input type="number" id="s-low" value="${def.low}"></div>
+      <div class="input-group"><label>Augmentation DCA (%)</label><input type="number" id="s-lowAdj" value="${def.lowAdjust}"></div>
+    </div>
+    <button class="btn btn-primary" onclick="saveSettings()">Sauvegarder</button>
+  </div>
+  <div class="card" style="margin-top:1rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:0.5rem;">Votre code d'accès</div>
+    <div class="code-display">${d.userCode}</div>
+    <div style="font-size:12px;color:#555;margin-top:0.5rem;">${sbReady() ? 'Ce code fonctionne sur tous vos appareils grâce à la synchronisation cloud.' : 'Mode local uniquement — configurez Supabase pour la synchro multi-appareils.'}</div>
+    <button class="btn" onclick="copyCode()" style="margin-top:0.75rem;font-size:12px;">Copier le code 📋</button>
+  </div>
+  ${!sbReady() ? `
+  <div class="card" style="margin-top:1rem;border-color:#FAC775;">
+    <div style="font-size:14px;font-weight:500;color:#633806;margin-bottom:0.5rem;">⚠ Synchronisation désactivée</div>
+    <div style="font-size:13px;color:#555;margin-bottom:0.75rem;">Activez Supabase pour utiliser votre code sur plusieurs appareils.</div>
+    <button class="btn" onclick="state.screen='setup';render()">Voir les instructions →</button>
+  </div>` : ''}
+  <div class="card" style="margin-top:1rem;border-color:#F7C1C1;">
+    <div style="font-size:14px;font-weight:500;color:#A32D2D;margin-bottom:0.5rem;">Zone de danger</div>
+    <button class="btn btn-danger" onclick="if(confirm('Supprimer toutes les données ?'))resetAll()">Réinitialiser toutes les données</button>
+  </div>`;
+}
+
+/* ---- MODALS ---- */
+function renderModal() {
+  const m = state.modal;
+
+  if(m.type === 'add-asset') {
+    const d=m.data||{}, def=state.data.defaults||{high:20,highAdjust:40,low:20,lowAdjust:40};
+    return `<div class="modal-overlay"><div class="modal">
+      <div class="modal-title">Ajouter un actif</div>
+      <div class="input-row">
+        <div class="input-group"><label>Nom *</label><input id="m-name" type="text" value="${d.name||''}" placeholder="Ex: Bitcoin"></div>
+        <div class="input-group"><label>Ticker</label><input id="m-ticker" type="text" value="${d.ticker||''}" placeholder="BTC"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label>Icône (emoji)</label><input id="m-icon" type="text" value="${d.icon||'📦'}" maxlength="2"></div>
+        <div class="input-group"><label>Prix actuel (€) *</label><input id="m-price" type="number" value="${d.currentPrice||''}" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label>Quantité détenue</label><input id="m-qty" type="number" value="${d.quantity||0}" step="0.0001" min="0"></div>
+        <div class="input-group"><label>Prix moyen d'achat (€)</label><input id="m-avg" type="number" value="${d.avgPrice||''}" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label>DCA mensuel base (€) *</label><input id="m-dca" type="number" value="${d.dcaBase||100}" step="1" min="1"></div>
+        <div class="input-group"><label>Réserve initiale (€)</label><input id="m-reserve" type="number" value="${d.reserve||0}" step="1" min="0"></div>
+      </div>
+      <div class="section-separator">Seuils de décision (vide = valeurs par défaut)</div>
+      <div class="input-row">
+        <div class="input-group"><label>Seuil haut (%)</label><input id="m-thigh"  type="number" value="${d.thresholds?.high??def.high}"></div>
+        <div class="input-group"><label>Réduction (%)</label><input id="m-thighA" type="number" value="${d.thresholds?.highAdjust??def.highAdjust}"></div>
+        <div class="input-group"><label>Seuil bas (%)</label><input id="m-tlow"   type="number" value="${d.thresholds?.low??def.low}"></div>
+        <div class="input-group"><label>Augmentation (%)</label><input id="m-tlowA" type="number" value="${d.thresholds?.lowAdjust??def.lowAdjust}"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="saveAsset()">Ajouter</button>
+      </div>
+    </div></div>`;
+  }
+
+  if(m.type === 'update-price') {
+    const a=m.asset;
+    return `<div class="modal-overlay"><div class="modal">
+      <div class="modal-title">Mettre à jour : ${a.name}</div>
+      <div class="input-row">
+        <div class="input-group"><label>Nouveau prix (€)</label><input id="m-newprice" type="number" value="${a.currentPrice}" step="0.01" min="0"></div>
+        <div class="input-group"><label>Quantité détenue</label><input id="m-newqty" type="number" value="${a.quantity}" step="0.0001" min="0"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label>Prix moyen d'achat (€)</label><input id="m-newavg" type="number" value="${a.avgPrice||''}" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmUpdatePrice()">Mettre à jour</button>
+      </div>
+    </div></div>`;
+  }
+
+  if(m.type === 'apply-dca') {
+    const a=m.asset, calc=calcDCA(a);
+    const qb = a.currentPrice>0 ? Math.round((calc.dcaRecommended/a.currentPrice)*10000)/10000 : 0;
+    const dc = calc.status==='high'?'decision-reduce':calc.status==='low'?'decision-invest':'decision-normal';
+    const exp = calc.status==='high' ? `Marché +${calc.pct}% au-dessus du prix moyen. Réduction du DCA de ${a.thresholds?.highAdjust||40}%.`
+              : calc.status==='low'  ? `Marché ${calc.pct}% en dessous du prix moyen. Augmentation du DCA via la réserve.`
+              : 'Prix dans la fourchette neutre. DCA normal appliqué.';
+    return `<div class="modal-overlay"><div class="modal">
+      <div class="modal-title">Confirmer le DCA — ${a.name}</div>
+      <div class="metric-grid" style="margin-bottom:1rem;">
+        <div class="metric"><div class="metric-label">Montant à investir</div><div class="metric-value neutral">€${fmt(calc.dcaRecommended)}</div></div>
+        <div class="metric"><div class="metric-label">Quantité achetée</div><div class="metric-value">${qb}</div></div>
+        <div class="metric"><div class="metric-label">Variation réserve</div><div class="metric-value ${calc.delta<=0?'positive':'negative'}">${calc.delta>=0?'-':'+'}€${fmt(Math.abs(calc.delta))}</div></div>
+      </div>
+      <div class="decision-box ${dc}" style="margin-bottom:1rem;">
+        <div class="decision-label">${calc.reason}</div>
+        <div style="font-size:13px;color:#444;margin-top:4px;">${exp}</div>
+      </div>
+      ${!calc.canApply && calc.status==='low' ? `<div class="alert alert-warning">Réserve épuisée. DCA limité au montant de base.</div>` : ''}
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-success" onclick="confirmDCA()">Confirmer et enregistrer</button>
+      </div>
+    </div></div>`;
+  }
+  return '';
+}
+
+/* ================================================================
+   ACTIONS
+   ================================================================ */
+async function newAccount() {
+  const code = genCode();
+  const d = { userCode:code, assets:[], history:[], defaults:{high:20,highAdjust:40,low:20,lowAdjust:40} };
+  state.data=d; state.screen='main';
+  saveData(d); render();
+  setTimeout(() => alert(`Votre code d'accès unique :\n\n${code}\n\nConservez-le précieusement.\nIl vous permet de vous connecter sur n'importe quel appareil.`), 200);
+}
+
+async function loginWithCode() {
+  const input = document.getElementById('code-input');
+  if(!input) return;
+  const code = input.value.toUpperCase().trim();
+  if(code.length < 6) { showError('Le code doit contenir au moins 6 caractères.'); return; }
+
+  const btn = document.getElementById('btn-login');
+  if(btn) { btn.disabled=true; btn.textContent='Recherche en cours...'; }
+
+  // 1. Cloud (Supabase)
+  if(sbReady()) {
+    try {
+      const d = await cloudLoad(code);
+      if(d) { localSave(d); state.data=d; state.screen='main'; render(); return; }
+    } catch(e) { console.warn('Cloud lookup failed:', e); }
+  }
+
+  // 2. Cache local
+  const local = localLoad();
+  if(local && local.userCode === code) { state.data=local; state.screen='main'; render(); return; }
+
+  // 3. Introuvable
+  if(btn) { btn.disabled=false; btn.textContent='Accéder'; }
+  showError(sbReady()
+    ? 'Code introuvable dans le cloud. Vérifiez les majuscules ou créez un nouveau compte.'
+    : 'Code introuvable en local. En mode local, le code ne fonctionne que sur cet appareil.');
+}
+
+function showError(msg) { const el=document.getElementById('code-error'); if(el) el.textContent=msg; }
+function setTab(t) { state.tab=t; render(); }
+function closeModal() { state.modal=null; render(); }
+
+function copyCode() {
+  const code = state.data?.userCode;
+  if(!code) return;
+  navigator.clipboard ? navigator.clipboard.writeText(code).then(()=>alert('Code copié !\n\n'+code)) : prompt('Votre code :', code);
+}
+
+function logout() {
+  if(confirm('Se déconnecter ?')) { state.screen='welcome'; state.data=null; state.modal=null; render(); }
+}
+
+function resetAll() {
+  localStorage.removeItem(LOCAL_KEY);
+  if(sbReady() && state.data?.userCode)
+    sbFetch(`${TABLE}?user_code=eq.${encodeURIComponent(state.data.userCode)}`,{method:'DELETE',prefer:'return=minimal'}).catch(()=>{});
+  state.screen='welcome'; state.data=null; state.modal=null; render();
+}
+
+function openAddAsset() { state.modal={type:'add-asset'}; render(); }
+
+function saveAsset() {
+  const name = document.getElementById('m-name')?.value.trim();
+  if(!name) { alert('Veuillez entrer un nom.'); return; }
+  const ticker=document.getElementById('m-ticker')?.value.trim(), icon=document.getElementById('m-icon')?.value.trim()||'📦';
+  const currentPrice=parseFloat(document.getElementById('m-price')?.value)||0;
+  const quantity=parseFloat(document.getElementById('m-qty')?.value)||0;
+  const avgRaw=parseFloat(document.getElementById('m-avg')?.value);
+  const avgPrice=!isNaN(avgRaw)&&avgRaw>0?avgRaw:currentPrice;
+  const dcaBase=parseFloat(document.getElementById('m-dca')?.value)||100;
+  const reserve=parseFloat(document.getElementById('m-reserve')?.value)||0;
+  const thresholds={high:parseFloat(document.getElementById('m-thigh')?.value)||20,highAdjust:parseFloat(document.getElementById('m-thighA')?.value)||40,low:parseFloat(document.getElementById('m-tlow')?.value)||20,lowAdjust:parseFloat(document.getElementById('m-tlowA')?.value)||40};
+  state.data.assets.push({id:'a_'+Date.now(),name,ticker,icon,currentPrice,quantity,avgPrice,dcaBase,reserve,thresholds});
+  saveData(state.data); state.modal=null; state.tab='dashboard'; render();
+}
+
+function deleteAsset(id) {
+  if(!confirm('Supprimer cet actif ?')) return;
+  state.data.assets=(state.data.assets||[]).filter(a=>a.id!==id);
+  state.data.history=(state.data.history||[]).filter(h=>h.assetId!==id);
+  saveData(state.data); render();
+}
+
+function updatePrice(id) {
+  const asset=(state.data.assets||[]).find(a=>a.id===id);
+  if(asset) { state.modal={type:'update-price',asset}; render(); }
+}
+
+function confirmUpdatePrice() {
+  const id=state.modal.asset.id, asset=(state.data.assets||[]).find(a=>a.id===id);
+  if(!asset) return;
+  const np=parseFloat(document.getElementById('m-newprice')?.value), nq=parseFloat(document.getElementById('m-newqty')?.value), na=parseFloat(document.getElementById('m-newavg')?.value);
+  if(!isNaN(np)&&np>0) asset.currentPrice=np;
+  if(!isNaN(nq)&&nq>=0) asset.quantity=nq;
+  if(!isNaN(na)&&na>0) asset.avgPrice=na;
+  saveData(state.data); state.modal=null; render();
+}
+
+function applyDCA(id) {
+  const asset=(state.data.assets||[]).find(a=>a.id===id);
+  if(asset) { state.modal={type:'apply-dca',asset}; render(); }
+}
+
+function confirmDCA() {
+  const a=state.modal.asset, asset=(state.data.assets||[]).find(x=>x.id===a.id);
+  if(!asset) return;
+  const calc=calcDCA(asset), qb=asset.currentPrice>0?Math.round((calc.dcaRecommended/asset.currentPrice)*10000)/10000:0;
+  const rd=asset.dcaBase-calc.dcaRecommended, oldQty=asset.quantity;
+  asset.quantity=Math.round((asset.quantity+qb)*10000)/10000;
+  asset.reserve=Math.max(0,Math.round(((asset.reserve||0)+rd)*100)/100);
+  if(asset.quantity>0) asset.avgPrice=Math.round((asset.avgPrice*oldQty+asset.currentPrice*qb)/asset.quantity*100)/100;
+  if(!state.data.history) state.data.history=[];
+  state.data.history.push({id:'h_'+Date.now(),date:new Date().toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}),assetName:asset.name,assetId:asset.id,price:asset.currentPrice,dcaApplied:calc.dcaRecommended,qty:qb,reserveDelta:Math.round(rd*100)/100,reason:calc.reason});
+  saveData(state.data); state.modal=null; render();
+}
+
+function saveSettings() {
+  state.data.defaults={high:parseFloat(document.getElementById('s-high')?.value)||20,highAdjust:parseFloat(document.getElementById('s-highAdj')?.value)||40,low:parseFloat(document.getElementById('s-low')?.value)||20,lowAdjust:parseFloat(document.getElementById('s-lowAdj')?.value)||40};
+  saveData(state.data); alert('Paramètres sauvegardés.');
+}
+
+function exportCSV() {
+  const h=state.data.history||[];
+  const csv=[['Date','Actif','Prix','DCA appliqué','Quantité','Variation réserve','Raison'],...h.map(e=>[e.date,e.assetName,e.price,e.dcaApplied,e.qty,e.reserveDelta,e.reason])].map(r=>r.join(';')).join('\n');
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
+  link.download='dca_historique.csv'; link.click();
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+(async () => {
+  const local = localLoad();
+
+  if(!sbReady()) {
+    // Pas de Supabase — mode local uniquement
+    state.screen = local ? 'main' : 'welcome';
+    state.data   = local || null;
+    render(); return;
+  }
+
+  // Supabase configuré
+  if(local) {
+    // Afficher immédiatement depuis le cache, puis rafraîchir en arrière-plan
+    state.data=local; state.screen='main'; render();
+    try {
+      const fresh = await cloudLoad(local.userCode);
+      if(fresh) { state.data=fresh; localSave(fresh); render(); }
+    } catch(e) { setSyncBadge('err'); }
+  } else {
+    state.screen='welcome'; render();
+  }
+})();
+</script>
+</body>
+</html>
